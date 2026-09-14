@@ -109,10 +109,20 @@ func (h *Handler) trackSession(sessionID uint32, username string) {
 	if _, exists := h.sessions[sessionID]; exists {
 		return
 	}
+	cfg := h.cfg.Current()
+	fired := map[int]bool{}
+	if uc, ok := cfg.Lookup(username); ok {
+		// If the user already has little time left today (e.g. they're
+		// logging back in after an earlier session), suppress any
+		// warning threshold already behind them instead of firing it on
+		// an upcoming tick with a stale "N minutes remaining" message.
+		remaining := tracker.RemainingSeconds(h.usage.UsedSeconds(username), uc.DailyLimitMinutes)
+		tracker.SeedFired(remaining, cfg.WarningsMinutesBefore, fired)
+	}
 	h.sessions[sessionID] = &trackedSession{
 		username:    username,
 		lastAccrual: time.Now(),
-		fired:       map[int]bool{},
+		fired:       fired,
 	}
 	h.log.Info(eventInfo, fmt.Sprintf("tracking session %d for monitored user %q", sessionID, username))
 }

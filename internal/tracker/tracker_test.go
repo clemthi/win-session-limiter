@@ -65,3 +65,30 @@ func TestNextWarningNoThresholds(t *testing.T) {
 		t.Fatal("expected no warning with empty threshold list")
 	}
 }
+
+func TestSeedFiredSuppressesAlreadyCrossedThresholds(t *testing.T) {
+	// A user logs back in with only 6 minutes left today (e.g. they used
+	// 24 of a 30 minute budget in an earlier session). The 15 and 10
+	// minute thresholds are already behind them and must not fire later
+	// with a stale "15/10 minutes remaining" message.
+	thresholds := []int{15, 10, 5, 1}
+	fired := map[int]bool{}
+	SeedFired(6*60, thresholds, fired)
+
+	if !fired[15] || !fired[10] {
+		t.Fatalf("expected 15 and 10 to be pre-suppressed, got %v", fired)
+	}
+	if fired[5] || fired[1] {
+		t.Fatalf("expected 5 and 1 to remain eligible, got %v", fired)
+	}
+
+	// 15 and 10 must never fire from here on...
+	if _, ok := NextWarning(6*60, thresholds, fired); ok {
+		t.Fatal("expected no warning immediately after seeding at 6 minutes remaining")
+	}
+	// ...but 5 still fires accurately once genuinely reached.
+	got, ok := NextWarning(5*60, thresholds, fired)
+	if !ok || got != 5 {
+		t.Fatalf("got (%d, %v), want (5, true)", got, ok)
+	}
+}

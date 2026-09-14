@@ -35,3 +35,17 @@ func NextWarning(remainingSeconds int64, thresholdsMinutes []int, fired map[int]
 	}
 	return 0, false
 }
+
+// SeedFired marks, without signaling a warning, every threshold that has
+// already been crossed by the time tracking starts (e.g. a user logs back
+// in after already using up most of today's budget in an earlier session).
+// Without this, NextWarning would fire each of those thresholds in turn
+// over the next few calls with a stale, inaccurate "N minutes remaining"
+// message even though far less than N minutes are actually left.
+func SeedFired(remainingSeconds int64, thresholdsMinutes []int, fired map[int]bool) {
+	for _, t := range thresholdsMinutes {
+		if remainingSeconds <= int64(t)*60 {
+			fired[t] = true
+		}
+	}
+}
