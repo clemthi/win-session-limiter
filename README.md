@@ -20,13 +20,46 @@ This creates `C:\ProgramData\WinSessionLimiter\config.json` (if it doesn't
 already exist), locks that folder down to Administrators/SYSTEM only, and
 registers + starts the `WinSessionLimiter` service (auto-start).
 
-Edit `config.json` to add the accounts to monitor, then either restart the
-service or just wait — it's picked up automatically within one poll interval:
+## Managing monitored users (run from an elevated prompt)
+
+```
+limiterd.exe add <user> <time>    # start limiting an account
+limiterd.exe edit <user> <time>   # change an account's daily limit
+limiterd.exe del <user>           # stop limiting an account
+```
+
+Examples:
+
+```
+limiterd.exe add kidaccount 90
+limiterd.exe edit kidaccount 1h30m
+limiterd.exe del kidaccount
+```
+
+- `<user>` is the Windows account name, matched case-insensitively.
+- `<time>` is either a number of minutes (`90`) or a duration (`2h`, `45m`,
+  `1h30m`). It must be a whole number of minutes.
+- A limit below 5 minutes is raised to 5, with a warning.
+- `add` fails if the account is already limited; `edit` and `del` fail if it
+  isn't.
+- Changes take effect in the running service within one poll interval; no
+  restart is needed.
+- These commands work before `install` too: they create the locked-down data
+  folder if it doesn't exist yet.
+
+Run `limiterd.exe help` (or `limiterd.exe` with no arguments) to list all
+commands.
+
+## Configuration file
+
+The commands above edit `C:\ProgramData\WinSessionLimiter\config.json` for
+you. You can also edit it by hand from an elevated editor; changes are
+picked up the same way:
 
 ```json
 {
   "pollIntervalSeconds": 15,
-  "warningsMinutesBefore": [15, 10, 5, 1],
+  "warningsMinutesBefore": [15, 10, 5, 3, 1],
   "users": {
     "kidaccount": { "dailyLimitMinutes": 120 }
   }
@@ -35,10 +68,14 @@ service or just wait — it's picked up automatically within one poll interval:
 
 - `dailyLimitMinutes` counts **all** logged-on time for that account each
   day (including locked/idle), reset at local midnight. It has a hard floor
-  of 30 minutes — a lower value in config.json is silently raised to 30.
+  of 5 minutes — a lower value in config.json is silently raised to 5. (The
+  minimum is defined once, as `MinDailyLimitMinutes` in
+  `internal/config/config.go`.)
 - `warningsMinutesBefore` fires a one-time popup in the user's session at
-  each of these remaining-minute marks. A 5-minute warning is always sent
-  regardless of this list, so a user is never logged off without notice.
+  each of these remaining-minute marks. The 5- and 3-minute warnings are
+  always sent, even if they're missing from this list, so a user is never
+  logged off without notice. Even at the 5-minute minimum limit, the user
+  still gets the 3-minute warning.
 - When the limit hits zero, the user is logged off automatically.
 
 ## Uninstall
@@ -62,7 +99,8 @@ as expected before installing for real.
 
 ## Notes
 
-- `go test ./...` covers the pure accounting logic (`internal/tracker`).
+- `go test ./...` covers the pure accounting logic (`internal/tracker`) and
+  config parsing/editing (`internal/config`).
 - Session logon/logoff detection and the forced-logoff call depend on
   Windows Terminal Services APIs and can only be fully exercised on a real
   multi-account Windows machine.

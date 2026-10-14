@@ -3,8 +3,10 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,17 +17,20 @@ const (
 	FileName                   = "config.json"
 
 	// MinDailyLimitMinutes is a hard floor on every user's daily limit: no
-	// matter what config.json says, a monitored account always gets at
-	// least this much logged-on time per day.
-	MinDailyLimitMinutes = 30
-
-	// MandatoryWarningMinutes is always included in the warning schedule,
-	// regardless of config.json, so a user is never logged off without at
-	// least a 5-minute notice.
-	MandatoryWarningMinutes = 5
+	// matter what config.json or the add/edit commands say, a monitored
+	// account always gets at least this much logged-on time per day. This
+	// is the single source of truth for the minimum; don't hardcode it
+	// elsewhere.
+	MinDailyLimitMinutes = 5
 )
 
-var DefaultWarningsMinutesBefore = []int{15, 10, 5, 1}
+var DefaultWarningsMinutesBefore = []int{15, 10, 5, 3, 1}
+
+// MandatoryWarningsMinutes are always included in the warning schedule,
+// regardless of config.json. The 3-minute one matters for users at the
+// minimum limit: they start with exactly 5 minutes, so the 5-minute warning
+// is already behind them and suppressed at logon.
+var MandatoryWarningsMinutes = []int{5, 3}
 
 type UserConfig struct {
 	DailyLimitMinutes int `json:"dailyLimitMinutes"`
@@ -48,8 +53,8 @@ func Default() *Config {
 }
 
 // normalize fills in defaults and enforces the invariants every loaded
-// config must satisfy: a sane poll interval, a mandatory 5-minute warning,
-// and a 30-minute floor on every user's daily limit.
+// config must satisfy: a sane poll interval, the MandatoryWarningsMinutes
+// warnings, and the MinDailyLimitMinutes floor on every user's daily limit.
 func (c *Config) normalize() {
 	if c.PollIntervalSeconds <= 0 {
 		c.PollIntervalSeconds = DefaultPollIntervalSeconds
@@ -57,15 +62,17 @@ func (c *Config) normalize() {
 	if len(c.WarningsMinutesBefore) == 0 {
 		c.WarningsMinutesBefore = append([]int(nil), DefaultWarningsMinutesBefore...)
 	}
-	if !containsInt(c.WarningsMinutesBefore, MandatoryWarningMinutes) {
-		c.WarningsMinutesBefore = append(c.WarningsMinutesBefore, MandatoryWarningMinutes)
+	for _, m := range MandatoryWarningsMinutes {
+		if !containsInt(c.WarningsMinutesBefore, m) {
+			c.WarningsMinutesBefore = append(c.WarningsMinutesBefore, m)
+		}
 	}
 	if c.Users == nil {
 		c.Users = map[string]UserConfig{}
 	}
 	for name, uc := range c.Users {
-		if uc.DailyLimitMinutes < MinDailyLimitMinutes {
-			uc.DailyLimitMinutes = MinDailyLimitMinutes
+		if clamped, raised := ClampLimit(uc.DailyLimitMinutes); raised {
+			uc.DailyLimitMinutes = clamped
 			c.Users[name] = uc
 		}
 	}
@@ -87,15 +94,87 @@ func (c *Config) PollInterval() time.Duration {
 	return time.Duration(c.PollIntervalSeconds) * time.Second
 }
 
+var (
+	ErrUserExists   = errors.New("user is already monitored")
+	ErrUserNotFound = errors.New("user is not monitored")
+)
+
 // Lookup returns the configured limit for username (case-insensitive) and
 // whether that user is monitored at all.
 func (c *Config) Lookup(username string) (UserConfig, bool) {
-	for name, uc := range c.Users {
+	key, ok := c.findKey(username)
+	if !ok {
+		return UserConfig{}, false
+	}
+	return c.Users[key], true
+}
+
+func (c *Config) findKey(username string) (string, bool) {
+	for name := range c.Users {
 		if strings.EqualFold(name, username) {
-			return uc, true
+			return name, true
 		}
 	}
-	return UserConfig{}, false
+	return "", false
+}
+
+func (c *Config) AddUser(username string, minutes int) error {
+	if _, ok := c.findKey(username); ok {
+		return fmt.Errorf("%q: %w", username, ErrUserExists)
+	}
+	c.Users[username] = UserConfig{DailyLimitMinutes: minutes}
+	return nil
+}
+
+// EditUser updates the limit of an existing user, keeping the casing of the
+// existing key.
+func (c *Config) EditUser(username string, minutes int) error {
+	key, ok := c.findKey(username)
+	if !ok {
+		return fmt.Errorf("%q: %w", username, ErrUserNotFound)
+	}
+	c.Users[key] = UserConfig{DailyLimitMinutes: minutes}
+	return nil
+}
+
+func (c *Config) DeleteUser(username string) error {
+	key, ok := c.findKey(username)
+	if !ok {
+		return fmt.Errorf("%q: %w", username, ErrUserNotFound)
+	}
+	delete(c.Users, key)
+	return nil
+}
+
+// ParseLimit parses a daily limit given either as a plain number of minutes
+// ("90") or as a Go duration ("1h30m", "2h", "45m").
+func ParseLimit(s string) (int, error) {
+	if n, err := strconv.Atoi(s); err == nil {
+		if n <= 0 {
+			return 0, fmt.Errorf("invalid time %q: must be greater than zero", s)
+		}
+		return n, nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("invalid time %q: use minutes (90) or a duration (1h30m)", s)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("invalid time %q: must be greater than zero", s)
+	}
+	if d%time.Minute != 0 {
+		return 0, fmt.Errorf("invalid time %q: must be a whole number of minutes", s)
+	}
+	return int(d / time.Minute), nil
+}
+
+// ClampLimit raises minutes to MinDailyLimitMinutes if needed, reporting
+// whether it did.
+func ClampLimit(minutes int) (int, bool) {
+	if minutes < MinDailyLimitMinutes {
+		return MinDailyLimitMinutes, true
+	}
+	return minutes, false
 }
 
 func Load(path string) (*Config, error) {
