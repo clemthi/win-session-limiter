@@ -92,3 +92,22 @@ func TestSeedFiredSuppressesAlreadyCrossedThresholds(t *testing.T) {
 		t.Fatalf("got (%d, %v), want (5, true)", got, ok)
 	}
 }
+
+func TestMinimumLimitStillGetsWarnings(t *testing.T) {
+	// A user with a 5 minute limit logs on with the full budget. The 5
+	// minute warning is already behind them, so the 3 and 1 minute ones
+	// must still give notice before logoff.
+	thresholds := []int{15, 10, 5, 3, 1}
+	fired := map[int]bool{}
+	SeedFired(5*60, thresholds, fired)
+
+	if _, ok := NextWarning(4*60, thresholds, fired); ok {
+		t.Fatal("expected no warning at 4 minutes remaining")
+	}
+	if got, ok := NextWarning(3*60, thresholds, fired); !ok || got != 3 {
+		t.Fatalf("got (%d, %v), want (3, true)", got, ok)
+	}
+	if got, ok := NextWarning(1*60, thresholds, fired); !ok || got != 1 {
+		t.Fatalf("got (%d, %v), want (1, true)", got, ok)
+	}
+}
