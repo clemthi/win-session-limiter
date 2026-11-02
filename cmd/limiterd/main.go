@@ -19,6 +19,7 @@ import (
 	"winsessionlimiter/internal/config"
 	"winsessionlimiter/internal/install"
 	"winsessionlimiter/internal/service"
+	"winsessionlimiter/internal/version"
 )
 
 func usage(w io.Writer) {
@@ -41,6 +42,7 @@ Service:
   run                 Entry point invoked by the Service Control Manager
   debug               Run the same logic in the foreground console, for testing
 
+  version             Show the version number
   help                Show this help
 `, filepath.Base(os.Args[0]), config.MinDailyLimitMinutes)
 }
@@ -56,6 +58,9 @@ func main() {
 	switch os.Args[1] {
 	case "help", "-h", "--help", "/?":
 		usage(os.Stdout)
+		return
+	case "version", "-v", "--version":
+		fmt.Println(version.Version)
 		return
 	case "add":
 		err = doAdd(args)
@@ -102,7 +107,7 @@ func doInstall() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s installed and started.\n", service.Name)
+	fmt.Printf("%s %s installed and started.\n", service.Name, version.Version)
 	fmt.Printf("Binary:       %s\n", exePath)
 	fmt.Printf("Config/state: %s\n", install.ProgramDataDir)
 	return nil

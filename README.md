@@ -59,7 +59,15 @@ limiterd.exe del kidaccount
   folder if it doesn't exist yet.
 
 Run `limiterd.exe help` (or `limiterd.exe` with no arguments) to list all
-commands.
+commands, and `limiterd.exe version` to print the version number.
+
+## Version
+
+The version number is defined once, as `Version` in
+`internal/version/version.go`; change it there when cutting a release.
+Besides `limiterd.exe version`, it's printed by `install` and recorded in the
+Event Viewer when the service starts. It does not appear in the file's
+Windows Properties (Details tab).
 
 ## Configuration file
 

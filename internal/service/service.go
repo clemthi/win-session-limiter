@@ -16,6 +16,7 @@ import (
 	"winsessionlimiter/internal/config"
 	"winsessionlimiter/internal/state"
 	"winsessionlimiter/internal/tracker"
+	"winsessionlimiter/internal/version"
 	"winsessionlimiter/internal/wts"
 )
 
@@ -241,7 +242,7 @@ func (h *Handler) Execute(args []string, r <-chan svc.ChangeRequest, changes cha
 	defer ticker.Stop()
 
 	changes <- svc.Status{State: svc.Running, Accepts: accepted}
-	h.log.Info(eventInfo, "service started")
+	h.log.Info(eventInfo, "service started, version "+version.Version)
 
 loop:
 	for {
