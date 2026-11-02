@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	ProgramDataDir = `C:\ProgramData\WinSessionLimiter`
+	ProgramDataDir = `C:\ProgramData\WinSessionL`
 	DisplayName    = "Win Session Limiter"
 	Description    = "Enforces daily logon time limits for monitored user accounts."
 )

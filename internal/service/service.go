@@ -19,7 +19,7 @@ import (
 	"winsessionlimiter/internal/wts"
 )
 
-const Name = "WinSessionLimiter"
+const Name = "WinSessionL"
 
 // Logger is the subset of svc/eventlog.Log used here, so callers can also
 // pass a plain stdout logger when running interactively via `debug`.
