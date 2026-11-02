@@ -63,9 +63,19 @@ commands, and `limiterd.exe version` to print the version number.
 
 ## Version
 
-The version number is defined once, as `Version` in
-`internal/version/version.go`; change it there when cutting a release.
-Besides `limiterd.exe version`, it's printed by `install` and recorded in the
+Releases follow [SemVer](https://semver.org) and are created automatically:
+every merge to `main` publishes a GitHub release tagged `vX.Y.Z`, with the
+built `limiterd.exe` attached. The bump is derived from the
+[Conventional Commits](https://www.conventionalcommits.org) prefixes of the
+commits merged since the previous release:
+
+- `feat!:` (any type followed by `!`) or a `BREAKING CHANGE:` line in the
+  commit body: major (`v1.4.2` → `v2.0.0`)
+- `feat:`: minor (`v1.4.2` → `v1.5.0`)
+- anything else (`fix:`, `chore:`, …): patch (`v1.4.2` → `v1.4.3`)
+
+The release build stamps that version into the binary; a local `go build`
+reports `dev`. Besides `limiterd.exe version`, it's printed by `install` and recorded in the
 Event Viewer when the service starts. It does not appear in the file's
 Windows Properties (Details tab).
 
