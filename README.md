@@ -16,9 +16,9 @@ go build -o limiterd.exe ./cmd/limiterd
 limiterd.exe install
 ```
 
-This creates `C:\ProgramData\WinSessionLimiter\config.json` (if it doesn't
+This creates `C:\ProgramData\WinSessionL\config.json` (if it doesn't
 already exist), locks that folder down to Administrators/SYSTEM only, and
-registers + starts the `WinSessionLimiter` service (auto-start).
+registers + starts the `WinSessionL` service (auto-start).
 
 ## Managing monitored users (run from an elevated prompt)
 
@@ -52,7 +52,7 @@ commands.
 
 ## Configuration file
 
-The commands above edit `C:\ProgramData\WinSessionLimiter\config.json` for
+The commands above edit `C:\ProgramData\WinSessionL\config.json` for
 you. You can also edit it by hand from an elevated editor; changes are
 picked up the same way:
 
@@ -84,7 +84,7 @@ picked up the same way:
 limiterd.exe uninstall
 ```
 
-Stops and removes the service. Files under `C:\ProgramData\WinSessionLimiter`
+Stops and removes the service. Files under `C:\ProgramData\WinSessionL`
 are left in place (delete manually if you also want the usage history gone).
 
 ## Local testing without installing
