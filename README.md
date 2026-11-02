@@ -16,9 +16,20 @@ go build -o limiterd.exe ./cmd/limiterd
 limiterd.exe install
 ```
 
-This creates `C:\ProgramData\WinSessionL\config.json` (if it doesn't
-already exist), locks that folder down to Administrators/SYSTEM only, and
-registers + starts the `WinSessionL` service (auto-start).
+This:
+
+1. Creates `C:\ProgramData\WinSessionL\config.json` (if it doesn't already
+   exist) and locks that folder down to Administrators/SYSTEM only.
+2. Copies `limiterd.exe` to `C:\Program Files\WinSessionL\WinSessionL.exe`.
+   Standard users can't write there, so the monitored account can't replace
+   or delete it.
+3. Registers and starts the `WinSessionL` service (auto-start), running the
+   copy in Program Files. In `services.msc` it appears as "Session Helper",
+   with a neutral description, so it's not obvious what it does.
+
+Because the service runs its own copy, you can move or delete the
+`limiterd.exe` you ran `install` from. To upgrade, run `uninstall` and then
+`install` with the new binary.
 
 ## Managing monitored users (run from an elevated prompt)
 
@@ -84,8 +95,14 @@ picked up the same way:
 limiterd.exe uninstall
 ```
 
-Stops and removes the service. Files under `C:\ProgramData\WinSessionL`
-are left in place (delete manually if you also want the usage history gone).
+Stops and removes the service, and deletes `C:\Program Files\WinSessionL\`.
+Files under `C:\ProgramData\WinSessionL` are left in place (delete them
+manually if you also want the config and usage history gone).
+
+Run `uninstall` from a copy outside `C:\Program Files\WinSessionL\`. If you
+run the installed copy itself, the service is still removed, but Windows
+won't let a running program delete its own folder, so you'll be told to
+delete that folder manually.
 
 ## Local testing without installing
 
@@ -99,8 +116,14 @@ as expected before installing for real.
 
 ## Notes
 
-- `go test ./...` covers the pure accounting logic (`internal/tracker`) and
-  config parsing/editing (`internal/config`).
+- `go test ./...` covers the pure accounting logic (`internal/tracker`),
+  config parsing/editing (`internal/config`), and copying the binary
+  (`internal/install`).
+- The folder names under Program Files and ProgramData, and the installed
+  binary's name, all come from the service name, `service.Name` in
+  `internal/service/service.go`. The name and description shown in
+  `services.msc` are `DisplayName` and `Description` in
+  `internal/install/install.go`.
 - Session logon/logoff detection and the forced-logoff call depend on
   Windows Terminal Services APIs and can only be fully exercised on a real
   multi-account Windows machine.

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -33,8 +34,10 @@ User management (requires elevation):
   service within one poll interval; no restart is needed.
 
 Service:
-  install             Register and start the Windows service (requires elevation)
-  uninstall           Stop and remove the Windows service (requires elevation)
+  install             Copy this binary to Program Files, then register and start
+                      the Windows service (requires elevation)
+  uninstall           Stop and remove the Windows service and its copy in
+                      Program Files (requires elevation)
   run                 Entry point invoked by the Service Control Manager
   debug               Run the same logic in the foreground console, for testing
 
@@ -91,14 +94,16 @@ func doInstall() error {
 	// can ignore (it just means a previous install already did this).
 	_ = eventlog.InstallAsEventCreate(service.Name, eventlog.Error|eventlog.Warning|eventlog.Info)
 
-	exePath, err := os.Executable()
+	srcExe, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("resolving executable path: %w", err)
 	}
-	if err := install.Service(exePath); err != nil {
+	exePath, err := install.Service(srcExe)
+	if err != nil {
 		return err
 	}
 	fmt.Printf("%s installed and started.\n", service.Name)
+	fmt.Printf("Binary:       %s\n", exePath)
 	fmt.Printf("Config/state: %s\n", install.ProgramDataDir)
 	return nil
 }
@@ -107,11 +112,15 @@ func doUninstall() error {
 	if err := install.RequireElevated(); err != nil {
 		return err
 	}
-	if err := install.Uninstall(); err != nil {
+	err := install.Uninstall()
+	if err != nil && !errors.Is(err, install.ErrInstallDirInUse) {
 		return err
 	}
 	_ = eventlog.Remove(service.Name)
 	fmt.Printf("%s stopped and removed. Data under %s was left in place.\n", service.Name, install.ProgramDataDir)
+	if err != nil {
+		fmt.Printf("Note: %v. Delete %s manually.\n", err, install.InstallDir)
+	}
 	return nil
 }
 
